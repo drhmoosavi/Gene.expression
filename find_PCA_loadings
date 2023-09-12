@@ -1,0 +1,36 @@
+find_PCA_loadings <- function(loadings, 
+                              PCA_loadings_top_n = 10, 
+                              num_PCs) {
+  # Ensure the required library is loaded
+  if (!requireNamespace("org.Hs.eg.db", quietly = TRUE)) {
+    stop("org.Hs.eg.db package must be installed and loaded.")
+  }
+  
+  # Check the number of PCs and limit if needed
+  num_PCs <- if (missing(num_PCs) || num_PCs > ncol(loadings)) ncol(loadings) else num_PCs
+  
+  # Create a list to store the data frames for each component
+  output_list <- lapply(1:num_PCs, function(i) {
+    # Extract the loadings for the current component
+    curr_loadings <- loadings[, i]
+    
+    # Find the indices of the top variables for the current component
+    top_var_idx <- head(order(abs(curr_loadings), decreasing = TRUE), PCA_loadings_top_n)
+    
+    # Extract the variable names and loadings for the top variables
+    top_vars <- names(curr_loadings[top_var_idx])
+    top_loadings <- round(curr_loadings[top_var_idx], 3)
+    symbol <- unname(annotate::getSYMBOL(top_vars, "org.Hs.eg.db"))
+    
+    # Create a data frame with the variable names and loadings
+    df <- data.frame(component = i, variable = top_vars, loading = top_loadings, symbol = symbol) 
+    df <- df[order(-abs(df$loading)),] # Order by the absolute value of the loadings
+    
+    return(df)
+  })
+  
+  # Combine the result into a single data frame
+  result_df <- do.call(rbind, output_list)
+  
+  return(result_df)
+}
