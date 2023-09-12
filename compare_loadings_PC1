@@ -1,0 +1,28 @@
+function(loadings) {
+  # Extract the loadings for PC1
+  loadings_PC1 <- loadings[, 1]
+  
+  # Separate positive and negative loadings
+  positive_loadings <- abs(loadings_PC1[loadings_PC1 > 0])
+  negative_loadings <- abs(loadings_PC1[loadings_PC1 < 0])
+  
+  # Perform the Wilcoxon Rank-Sum test
+  test_result <- wilcox.test(positive_loadings, negative_loadings)
+  
+  # Determine the direction of the difference
+  direction <- ifelse(median(positive_loadings) > median(negative_loadings),
+                      "Positive loadings have a larger absolute contribution.",
+                      "Negative loadings have a larger absolute contribution.")
+  
+  # Interpret the result
+  if (test_result$p.value < 0.05) {
+    result <- cat(red("There is evidence to suggest a difference in the absolute contributions of positive and negative loadings to PC1.\n") %+%
+                  bold("Conclusion:\n") %+% bold(yellow(direction)) , sep = "\n")
+  } else {
+    result <- cat("There is no evidence to suggest a difference\nin the absolute contributions of positive and negative loadings to PC1.")
+  }
+  
+  # Return the result along with the test details
+  return(list(Result = test_result))
+  
+}
