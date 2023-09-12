@@ -1,0 +1,71 @@
+scaled_by_group <- function(gene_expression_matrix, 
+                            group_index) {
+  # Check if the gene_expression_matrix and group_index have the same number of columns
+  if (ncol(gene_expression_matrix) != length(group_index)) {
+    stop("Number of columns in the gene expression matrix must match the length of the groups vector.")
+  }
+  
+  # Get unique groups
+  unique_groups <- unique(group_index)
+  
+  # Initialize a list to store the normalized data for each group
+  scaled_list <- vector("list", length(unique_groups))
+  
+  # Create an empty vector to store both pre and post-transformed data
+  combined_data <- c()
+  
+  # Create a vector to store the transformation labels
+  transformation <- c()
+  
+  # Iterate through each group and perform Z-score normalization
+  for (i in seq_along(unique_groups)) {
+    group <- unique_groups[i]
+    group_indices <- which(group_index == group)
+    group_data <- gene_expression_matrix[, group_indices]
+    
+    # Perform Z-score normalization using caret's preProcess function
+    preproc <- caret::preProcess(group_data, method = c("center", "scale"))
+    scaled_group_data <- predict(preproc, group_data)
+    
+    # Store the normalized data in the list
+    scaled_list[[i]] <- scaled_group_data
+    
+    # Append the data to the combined data vector
+    combined_data <- c(combined_data, as.vector(group_data), as.vector(scaled_group_data))
+    transformation <- c(transformation, rep("Pre", length(as.vector(group_data))), rep("Post", length(as.vector(scaled_group_data))))
+  }
+  
+  # Combine the normalized data back into a matrix
+  scaled_matrix <- do.call(cbind, scaled_list)
+  
+  # Order the columns of the normalized matrix according to the original gene_expression_matrix
+  scaled_matrix <- scaled_matrix[, colnames(gene_expression_matrix)]
+  
+  # Create a data frame for the plot
+  plot_data <- data.frame(combined_data = combined_data, transformation = factor(transformation, levels = c("Pre", "Post")))
+  
+  # Define custom settings
+  custom_settings <- list(
+    plot.polygon = list(border="transparent"),
+    strip.background = list(col = "gray50"),
+    axis.text = list(cex = 0.8),
+    layout.heights = list(bottom.padding = -1) # Removes ticks at the top
+  )
+  
+  # Create the histogram
+  plot <- histogram(~combined_data | transformation, data = plot_data,
+                    #par.settings = custom_settings, 
+                    par.strip.text=list(col="white", font=2, size=5),
+                    xlab = "Transformation",
+                    main = "",
+                    plot.points = FALSE,
+                    layout = c(2, 1), # Two plots horizontally
+                    auto.key = TRUE,
+                    scales = list(x = list(alternating = 1)), # Ticks at the bottom only
+                    nint = 30, breaks = 50,
+                    col = "royalblue4")
+  
+  print(plot)
+  
+  return(scaled_matrix)
+}
