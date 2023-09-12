@@ -1,0 +1,72 @@
+plot_venn <- function(named_list, 
+                      category.names = names(named_list), 
+                      set_color = NULL, 
+                      edge_size = 0.85, 
+                      title = "Venn Diagram ",
+                      additional_layers = NULL,
+                      params = list()) {
+  
+  # List of required packages
+  required_packages <- c("ggplot2", "ggVennDiagram", "MetBrewer")
+  
+  # Check each package and print a warning if it's not installed
+  for(pkg in required_packages) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      print(paste("The package", pkg, "is not installed. Please install it to use this function."))
+    }
+  }
+  
+  # Check if category.names is missing and set default value
+  if (!missing(category.names)) {
+    print("category.names is not provided, using default names.")
+  }
+  
+  # Check if set_color is missing and set default value
+  if (is.null(set_color)) {
+    set_color <- MetBrewer::met.brewer("Hokusai1", length(named_list))
+    print("set_color is not provided, using default color.")
+  }
+  
+  # Create a list of all parameters used in ggVennDiagram
+  all_params <- list(set_size = 4,
+                     label = "count",
+                     label_alpha = 0.1, 
+                     label_size = 4,
+                     label_color = "pink2",
+                     edge_size = edge_size)
+  
+  # Merge user-provided params into all_params
+  if(length(params) > 0) {
+    all_params <- modifyList(all_params, params)
+  }
+  
+  # Create the Venn diagram
+  plot <- do.call(ggVennDiagram, 
+                  c(list(x = named_list, 
+                         category.names = category.names,
+                         set_color = set_color),
+                    all_params)) +
+    scale_color_manual(values = rep("white", length(named_list))) +
+    scale_x_continuous(expand = expansion(mult = 0.5)) + 
+    scale_y_continuous(expand = expansion(mult = .1)) +
+    scale_fill_gradient(low = "blue", high = "yellow") +
+    theme(legend.position = "bottom",
+          legend.margin = margin(0, -20, 0, 20),
+          legend.key.width = unit(6, "mm"),
+          legend.key.height = unit(2.5, "mm"),
+          plot.title = element_text(hjust = 0.5, size = 7, face = 3)) + 
+    labs(fill = "", title = title) +
+    guides(fill = guide_colorbar(ticks = FALSE, 
+                                 frame.colour = "navy", 
+                                 frame.linewidth = 0.4,
+                                 title.position = "top",
+                                 title.hjust = 0.5,
+                                 label.theme = element_text(size= 7, face = 2)))
+  
+  if(!missing(additional_layers)) {
+    # Add any additional ggplot2 layers passed in via ...
+    plot <- plot + additional_layers
+  }
+  
+  return(plot)
+}
