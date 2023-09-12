@@ -1,0 +1,74 @@
+GSEA.table <- function(camera_df_list, n = NULL, 
+                       direction = "updown", 
+                       fdr_threshold = 0.05, 
+                       log_base = 10) {
+  #' GSEA_table: Filters and sorts data frames based on FDR and direction.
+  #'
+  #' @param camera_df_list List of data frames to process.
+  #' @param n Number of top rows to select based on sorted FDR (optional).
+  #' @param direction "Up", "Down", or "updown" to filter rows based on the Direction column.
+  #' @param fdr_threshold FDR value below which rows will be selected.
+  #' @param log_base Base for the logarithmic transformation of FDR.
+  #' @return List of filtered and optionally sliced data frames.
+  
+  result <- list()
+  empty_dfs <- list()  # List to collect names of empty or inappropriate data frames
+  
+  for (name in names(camera_df_list)) {
+    df <- camera_df_list[[name]]
+    
+    # Skip data frames that are empty or have dimensions less than 1
+    if (!is.data.frame(df) || nrow(df) <= 0 || ncol(df) <= 0) {
+      empty_dfs <- c(empty_dfs, name)
+      next  # Skip the rest of the loop for this data frame
+    }
+    
+    # Check if "Direction" column exists, if not, create based on "logFC"
+    if (!"Direction" %in% names(df) && "logFC" %in% names(df)) {
+      df <- df %>% mutate(Direction = ifelse(logFC >= 0, "Up", "Down"),
+                          FDR = adj.P.Val) %>% dplyr::select(!adj.P.Val)
+    }
+    
+    if (direction == "updown") {
+      df_up <- df %>% 
+        filter(Direction == "Up", FDR <= fdr_threshold) %>%
+        mutate(logFDR = -log(FDR, base = log_base)) %>%
+        arrange(-logFDR)
+      
+      df_down <- df %>% 
+        filter(Direction == "Down", FDR <= fdr_threshold) %>%
+        mutate(logFDR = -log(FDR, base = log_base)) %>%
+        arrange(logFDR)
+      
+      if (!is.null(n)) {
+        df_up <- df_up %>% slice_head(n = n)
+        df_down <- df_down %>% 
+          slice_tail(n = n) %>% 
+          arrange(., desc(logFDR)) %>% 
+          mutate(logFDR = logFDR * -1 )
+      }
+      
+      df <- bind_rows(df_up, df_down) %>% 
+        tibble::rownames_to_column(., var = "name")
+      
+    } else {
+      df <- df %>% 
+        filter(Direction == direction, FDR <= fdr_threshold) %>%
+        mutate(logFDR = -log(FDR, base = log_base)) %>%
+        arrange(-logFDR) %>% 
+        tibble::rownames_to_column(., var = "name")
+      
+      if (!is.null(n)) {
+        df <- df %>% slice_head(n = n)
+      }
+    }
+    
+    result[[name]] <- df
+  }
+  
+  # Remove NULL results from the list, if any
+  result <- Filter(Negate(is.null), result)
+  
+  return(c(result, empty_dfs))
+  
+}
