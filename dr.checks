@@ -1,0 +1,117 @@
+dr.checks <- function(expression_matrix,
+                      grouping_vector,
+                      method = "sd",
+                      percentage = NULL,
+                      top_n_gene = NULL,
+                      gene_subset = NULL,
+                      k_MDS = NULL,
+                      PCA_loadings_top_n = NULL,
+                      num_PCs = NULL,
+                      colors = NULL) {
+  
+  if (!is.matrix(expression_matrix)) {
+    stop("Input must be a matrix.")
+  }
+  if (length(grouping_vector) != ncol(expression_matrix)) {
+    stop("Length of grouping_vector must match the number of columns in expression_matrix.")
+  }
+  
+  # Define a color palette
+  if (is.null(colors)) {
+    col.mat_1 <- c("#FFC95F", "#F7DBF0", "#A084CA", "#A84448", "#42C2FF")
+  } else {
+    col.mat_1 <- colors
+  }
+  
+  # Check if gene_subset is not NULL, if so, use it
+  if (!is.null(gene_subset)) {
+    selected_genes <- expression_matrix[ rownames(expression_matrix) %in% gene_subset, ]
+  } else { # Select top genes based on previous code
+    cat(bold("Perform " %+% yellow("PCA, ") %+% yellow("MDS ") %+% "and " %+% yellow("UMAP"), "with " %+%  bold(red(top_n_gene))  %+% " genes.\n\n"))
+    selected_genes <- select_top_genes(expression_matrix, method, percentage, top_n_gene)
+  }
+  
+  # Transpose the selected genes matrix
+  transposed_genes <- t(selected_genes)
+  
+  # Perform PCA
+  cat("Step 1: Perform PCA.\n")
+  pca_result <- prcomp(transposed_genes, scale. = FALSE)
+  pca_df <- data.frame(pca_result$x)
+  pca_df$group <- grouping_vector
+  cat("PCA Done!\nPlot 5 first PCs.\n\n")
+  
+  # Determine the value of k for MDS
+  if (is.null(k_MDS)) {
+    k_MDS <- 3
+    cat("k for MDS not defined; defaulting to 3\n")
+  }
+  
+  # Perform MDS
+  cat(bold("Step 2: Perform MDS\n"))
+  dist_matrix <- as.dist(1 - cor(t(transposed_genes), method = "pearson"))
+  mds_result <- cmdscale(dist_matrix, eig = TRUE, k = k_MDS)
+  mds_df <- data.frame(mds_result$points)
+  mds_df$group <- grouping_vector
+  colnames(mds_df) <- c(paste0("MDS", 1:k_MDS), "group")
+  cat(crayon::bold(crayon::green("MDS Done!\n\n")))
+  
+  # Perform UMAP
+  cat(bold("Step 3: Perform UMAP using\n`Mormlaplacian method | Euclidean Distance`\n"))
+  umap_result <- uwot::umap(transposed_genes,
+                            n_neighbors = 30,
+                            n_components = 5,
+                            metric = "euclidean",
+                            n_epochs = NULL,
+                            scale = "Z",
+                            init = "normlaplacian",
+                            nn_method = "annoy",
+                            n_trees = 500,
+                            search_k = 250,
+                            min_dist = 0.23,
+                            spread = 0.8,
+                            negative_sample_rate = 10)
+  umap_df <- data.frame(umap_result)
+  umap_df$group <- grouping_vector
+  colnames(umap_df) <- c(paste0("UMAP", 1:5), "group")
+  cat(crayon::bold(crayon::green("All Done!\nGo Explore!\n\n")))
+  
+  # Create plot and save it
+  pcaplot <- function() {
+    pairs(pca_df[, 1:5],
+          pch = 20,
+          col = col.mat_1[factor(grouping_vector)],
+          font = 4,
+          font.lab = 4,
+          las = 2,
+          cex = 1.4,
+          cex.axis = 0.9,
+          cex.lab = 1.2,
+          upper.panel = NULL)
+  }
+  print(pcaplot())
+  
+  # Select top genes based on previous code
+  cat(crayon::bold(crayon::green("Top 10 contributing variables to each principal component.\n\n")))
+  PCA_loadings <- find_PCA_loadings(pca_result$rotation, PCA_loadings_top_n, num_PCs)
+  
+  split_data <- split(PCA_loadings, PCA_loadings$component)
+  names(split_data) <- paste0("PC_", names(split_data))
+  print(split_data)
+  
+  # compare PC1 loading effect
+  PC1_loadings <- compare_loadings_PC1(pca_result$rotation)
+  # print(PC1_loadings)
+  
+  # Create a list with method and number of variables set by the user
+  user_settings <- list(method = method,
+                        number_of_variables = ifelse(is.null(top_n_gene), percentage * 100, top_n_gene),
+                        k_MDS = k_MDS)
+  
+  return(list(pca = pca_df, 
+              mds = mds_df, 
+              umap = umap_df, 
+              settings = user_settings, 
+              PCA_loadings = PCA_loadings, 
+              pcaplot = pcaplot))
+}
